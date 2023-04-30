@@ -137,7 +137,7 @@ async function moyamoyaRecorder(event) {
       const newComment = {
         comment: text,
         commented: user,
-        createdAt: createdAt,
+        createdAt: createdAt.toString(),
       };
       let comments = parentData.comments || [];
       comments.push(newComment);
