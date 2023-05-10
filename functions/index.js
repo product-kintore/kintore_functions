@@ -10,12 +10,10 @@ require('dotenv').config();
 const firestore = new Firestore();
 const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET);
 
-// URLの正規表現
 const urlPattern = /<(https?:\/\/[^\s]+)>/g;
-
 const fetchPageTitle = async (url) => {
   try {
-    const response = await axios.get(url);
+    const response = await axios.get(url, { timeout : 10000 });
     const $ = cheerio.load(response.data);
     return $('title').text();
   } catch (error) {
@@ -24,11 +22,7 @@ const fetchPageTitle = async (url) => {
   }
 };
 
-function extractContent(tag) {
-  const regex = /<([^>]+)>/;
-  const match = tag.match(regex);
-  return match ? match[1] : null;
-}
+
 
 slackEvents.on('message', async (event) => {
   console.log("message event")
@@ -36,9 +30,10 @@ slackEvents.on('message', async (event) => {
 
   console.log(event);
   const channelId = event.channel;
-  // if (channelId == "C0336LF8HEG" || channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
-  if (channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
-  if (channelId == "C0336LF8HEG" || channelId == "C01H2PN9ETA") await moyamoyaRecorder(event); // #bot-test or #3_モヤモヤ
+  if (channelId == "C0336LF8HEG" || channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
+  // if (channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
+  // if (channelId == "C0336LF8HEG" || channelId == "C01H2PN9ETA") await moyamoyaRecorder(event); // #bot-test or #3_モヤモヤ
+  if (channelId == "C01H2PN9ETA") await moyamoyaRecorder(event); // #3_モヤモヤ
 });
 
 async function iikijiRecorder(event) {
@@ -62,22 +57,11 @@ async function iikijiRecorder(event) {
 
   if (!urls) {
     console.log("URL含まれてない");
-    return; // URLが含まれていない場合、何もしない
+    return; 
   }
 
-  console.log("URL含まれてる");
-  const messagesRef = firestore.collection('articles');
   const url = extractContent(urls[0]);
   const pageTitle = await fetchPageTitle(url);
-  const messageData = {
-    url: url,
-    title: pageTitle,
-    message: text,
-    ts: event.ts,
-    slackMessageUrl: `https://product-kintore.slack.com/archives/${event.channel}/p{ts.replace('.', '')}`,
-  };
-
-  await messagesRef.add(messageData);
 
   var notionEndpoint = 'https://api.notion.com/v1/pages';
   var notion_token = 'secret_G2WfIJxYjdQqui6kRWqz9AhEfkELojwTFOEMb9wywhE';
@@ -105,7 +89,7 @@ async function iikijiRecorder(event) {
           "url": url
       },
       "slackMessageUrl": {
-          "url":  `https://product-kintore.slack.com/archives/${event.channel}/p${ts.replace('.', '')}`,
+          "url":  `https://product-kintore.slack.com/archives/${event.channel}/p${event.ts.replace('.', '')}`,
       },
       "Property": {
           "rich_text": [
@@ -119,7 +103,17 @@ async function iikijiRecorder(event) {
     },
   };
 
-  console.log(await axios.post(notionEndpoint, post_data, {headers: headers}));  
+  await axios.post(notionEndpoint, post_data, {headers: headers});  
+
+  const messagesRef = firestore.collection('articles');
+  const messageData = {
+    url: url,
+    title: pageTitle,
+    message: text,
+    ts: event.ts,
+    slackMessageUrl: `https://product-kintore.slack.com/archives/${event.channel}/p${event.ts.replace('.', '')}`,
+  };
+  await messagesRef.add(messageData);
 }
 
 async function moyamoyaRecorder(event) {
@@ -132,7 +126,6 @@ async function moyamoyaRecorder(event) {
     const parentDocRef = firestore.collection('moyamoya').doc(thread_ts);
     const parentDoc = await parentDocRef.get();
     if (parentDoc.exists) {
-      console.log("親あり！");
       const parentData = parentDoc.data();
       const newComment = {
         comment: text,
@@ -161,6 +154,11 @@ async function moyamoyaRecorder(event) {
   await firestore.collection('moyamoya').doc(ts).set(data);
 }
 
+function extractContent(tag) {
+  const regex = /<([^>]+)>/;
+  const match = tag.match(regex);
+  return match ? match[1] : null;
+}
 
 exports.slackApp = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   console.log('Received a request');
