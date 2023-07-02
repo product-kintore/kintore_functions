@@ -3,12 +3,16 @@ const { WebClient } = require('@slack/web-api');
 const { Firestore } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
 const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 const axios = require('axios');
 const cheerio = require('cheerio');
 require('dotenv').config();
 
 const firestore = new Firestore();
-const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET);
+admin.initializeApp();
+const projectId = admin.instanceId().app.options.projectId;
+const isDev = projectId != "product-kintore";
+const slackEvents = createEventAdapter(isDev ? process.env.DEV_SLACK_SIGNING_SECRET : process.env.SLACK_SIGNING_SECRET);
 
 const urlPattern = /<(https?:\/\/[^\s]+)>/g;
 const fetchPageTitle = async (url) => {
@@ -26,7 +30,7 @@ const fetchPageTitle = async (url) => {
 
 slackEvents.on('message', async (event) => {
   console.log("message event")
-  const webClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+  const webClient = new WebClient(isDev ? process.env.DEV_SLACK_BOT_TOKEN : process.env.SLACK_BOT_TOKEN);
 
   console.log(event);
   const channelId = event.channel;
