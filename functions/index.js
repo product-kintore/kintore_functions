@@ -169,3 +169,46 @@ exports.slackApp = functions.region('asia-northeast1').https.onRequest(async (re
   slackEvents.requestListener()(req, res);
 });
 
+exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+  let text = "今週、新しく参加してくださった方を紹介します:tada::tada:あたたかくお迎えしましょう:muscle: \n";
+  text += "--------------\n";
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  try {
+    const snapshot = await firestore.collection('users')
+      .where('created_at', '>', oneWeekAgo)
+      .get();
+
+    if (snapshot.empty) {
+      console.log('今週の参加者はいなかったよ');
+      return;
+    }  
+
+    snapshot.forEach(doc => {
+      const userData = doc.data();
+      text += `<https://product-kintore.web.app/profile/${userData.profile}|${userData.name}さん><@${userData.id}>\n`; // TBD: urlは適当
+      if(userData.company != undefined) text += `　　所属は${userData.company}\n`;
+      if(userData.role!= undefined) text += `　　役割は${userData.role}\n`;
+      if(userData.interested_activities != undefined) text += `興味がある活動は${userData.interested_activities.title}\n`;
+    });
+  } 
+  catch (error) {
+    console.error(error);
+  }
+
+  const webClient = new WebClient(isDev ? process.env.DEV_SLACK_BOT_TOKEN : process.env.SLACK_BOT_TOKEN);
+  try {
+    await webClient.chat.postMessage({
+      channel: isDev ? "C05G11EHUP7" : "C01H2P2M8F2",
+      text: text,
+    });
+  }
+  catch (error) {
+    console.error(error);
+  }
+
+  response.send("ok");
+});
+
