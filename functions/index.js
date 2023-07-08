@@ -1,7 +1,8 @@
 
 const { WebClient } = require('@slack/web-api');
-const { Firestore } = require('@google-cloud/firestore');
+const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
+
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
@@ -32,7 +33,20 @@ slackEvents.on('team_join', async (event) => {
     await webClient.chat.postMessage({
       channel: event.user.id,
       text: ":tada: プロダクト筋トレへようこそ\nここは「プロダクトづくりに関する知識を広げ、深め、身につける」を目的に、「他者から学び合う」コミュニティです。\nぜひ、みなさんで知見の交換をして良いプロダクトをつくっていきましょう！\n\n:eyes: どんな人がいるの？ // TBD: URLを貼る \n:eyes: まず何をすればいいの？ #0_自己紹介 に自己紹介を投稿してみてください！ // TBD: 新しいフローを案内したいのでURLをはる\n:eyes: 困った時は？\n #投書箱 か #2_雑談 もしくは <@D01GCTQH0AW>に 声をかけてください！",
-     });
+    });
+
+    const response = await webClient.users.info({
+      user: event.user.id,
+    });
+
+    const timestamp = FieldValue.serverTimestamp();
+    await firestore.collection('users').doc(event.user.id).set({
+      id: event.user.id,
+      name: event.user.name,
+      email: response.user.profile.email,
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
   }
   catch (error) {
     console.error(error);
