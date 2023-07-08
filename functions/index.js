@@ -26,8 +26,6 @@ const fetchPageTitle = async (url) => {
   }
 };
 
-
-
 slackEvents.on('message', async (event) => {
   console.log("message event")
   const webClient = new WebClient(isDev ? process.env.DEV_SLACK_BOT_TOKEN : process.env.SLACK_BOT_TOKEN);
@@ -38,6 +36,37 @@ slackEvents.on('message', async (event) => {
   // if (channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
   // if (channelId == "C0336LF8HEG" || channelId == "C01H2PN9ETA") await moyamoyaRecorder(event); // #bot-test or #3_モヤモヤ
   if (channelId == "C01H2PN9ETA") await moyamoyaRecorder(event); // #3_モヤモヤ
+});
+
+slackEvents.on('reaction_added', async (event) => {
+  // 自己紹介チャンネル以外でリアクションされたときは無視する
+  if (event.item.channel !== 'C05G11EHUP7' && event.item.channel !== 'C01H2P2M8F2') {
+    return;
+  }
+
+  const webClient = new WebClient(isDev ? process.env.DEV_SLACK_BOT_TOKEN : process.env.SLACK_BOT_TOKEN);
+  try {
+    const snapshot = await firestore.collection('users')
+      .where('latest_slack_thread', '==', event.item.ts)
+      .get();
+
+    if (snapshot.empty) {
+      console.log('リアクションに一致する自己紹介はありませんでした');
+      return;
+    }  
+
+    snapshot.forEach(async doc => {
+      const userData = doc.data();
+      await webClient.chat.postMessage({
+        channel : userData.id,
+        text    : `あなたの自己紹介にリアクションがありました:${event.reaction}:`
+      });
+      console.log(`ID: ${userData.id}, Name: ${userData.name}`);
+    });
+  } 
+  catch (error) {
+    console.error(error);
+  }
 });
 
 async function iikijiRecorder(event) {
