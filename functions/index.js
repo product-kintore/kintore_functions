@@ -1,7 +1,8 @@
 
 const { WebClient } = require('@slack/web-api');
-const { Firestore } = require('@google-cloud/firestore');
+const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
+
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
@@ -26,11 +27,35 @@ const fetchPageTitle = async (url) => {
   }
 };
 
-slackEvents.on('message', async (event) => {
-  console.log("message event")
+slackEvents.on('team_join', async (event) => {
   const webClient = new WebClient(isDev ? process.env.DEV_SLACK_BOT_TOKEN : process.env.SLACK_BOT_TOKEN);
+  try {
+    await webClient.chat.postMessage({
+      channel: event.user.id,
+      text: ":tada: プロダクト筋トレへようこそ\nここは「プロダクトづくりに関する知識を広げ、深め、身につける」を目的に、「他者から学び合う」コミュニティです。\nぜひ、みなさんで知見の交換をして良いプロダクトをつくっていきましょう！\n\n:eyes: どんな人がいるの？ // TBD: URLを貼る \n:eyes: まず何をすればいいの？ #0_自己紹介 に自己紹介を投稿してみてください！ // TBD: 新しいフローを案内したいのでURLをはる\n:eyes: 困った時は？\n #投書箱 か #2_雑談 もしくは <@D01GCTQH0AW>に 声をかけてください！",
+    });
 
+    const response = await webClient.users.info({
+      user: event.user.id,
+    });
+
+    const timestamp = FieldValue.serverTimestamp();
+    await firestore.collection('users').doc(event.user.id).set({
+      id: event.user.id,
+      name: event.user.name,
+      email: response.user.profile.email,
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+  }
+  catch (error) {
+    console.error(error);
+  }
+});
+
+slackEvents.on('message', async (event) => {
   console.log(event);
+
   const channelId = event.channel;
   if (channelId == "C0336LF8HEG" || channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
   // if (channelId == "C01FY636KD5") await iikijiRecorder(event); // #bot-test or #1_いい記事系
@@ -196,5 +221,48 @@ function extractContent(tag) {
 exports.slackApp = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   console.log('Received a request');
   slackEvents.requestListener()(req, res);
+});
+
+exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+  let text = "今週、新しく参加してくださった方を紹介します:tada::tada:あたたかくお迎えしましょう:muscle: \n";
+  text += "--------------\n";
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  try {
+    const snapshot = await firestore.collection('users')
+      .where('created_at', '>', oneWeekAgo)
+      .get();
+
+    if (snapshot.empty) {
+      console.log('今週の参加者はいなかったよ');
+      return;
+    }  
+
+    snapshot.forEach(doc => {
+      const userData = doc.data();
+      text += `<https://product-kintore.web.app/profile/${userData.profile}|${userData.name}さん><@${userData.id}>\n`; // TBD: urlは適当
+      if(userData.company != undefined) text += `　　所属は${userData.company}\n`;
+      if(userData.role!= undefined) text += `　　役割は${userData.role}\n`;
+      if(userData.interested_activities != undefined) text += `興味がある活動は${userData.interested_activities.title}\n`;
+    });
+  } 
+  catch (error) {
+    console.error(error);
+  }
+
+  const webClient = new WebClient(isDev ? process.env.DEV_SLACK_BOT_TOKEN : process.env.SLACK_BOT_TOKEN);
+  try {
+    await webClient.chat.postMessage({
+      channel: isDev ? "C05G11EHUP7" : "C01H2P2M8F2",
+      text: text,
+    });
+  }
+  catch (error) {
+    console.error(error);
+  }
+
+  response.send("ok");
 });
 
