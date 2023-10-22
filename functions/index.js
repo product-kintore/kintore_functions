@@ -235,3 +235,51 @@ exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async
   response.send("ok");
 });
 
+exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) => {
+  try {
+    const data = await connect(request.query.code);
+    const userInfo = await fetchUserInfo(data.access_token);
+    const userId = userInfo.sub;
+    const email = userInfo.email;
+    const picture = userInfo.picture;
+    const name = userInfo.name;
+
+    const customToken = await admin.auth().createCustomToken(userId);
+
+    const url = new URL("https://product-kintore-dev.web.app/");
+    url.search = `t=${customToken}&e=${email}&p=${picture}&n=${name}&u=${userId}`;
+    response.redirect(303, url.toString());
+    return;
+  } catch (err) {
+    logger.error(err);
+    response.status(500).end();
+    return;
+  }
+});
+
+const connect = async (code) => {
+  const client = axios.create({
+    baseURL: "https://slack.com/api",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  });
+  const res = await client.post("/openid.connect.token", {
+    client_id: defineString("SLACK_CLIENT_ID").value(),
+    client_secret: defineString("SLACK_CLIENT_SECRET").value(),
+    code,
+  });
+  return res.data;
+};
+
+const fetchUserInfo = async (accessToken) => {
+  const client = axios.create({
+    baseURL: "https://slack.com/api",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Bearer ${accessToken}`,
+    },
+  });
+  const res = await client.get("/openid.connect.userInfo");
+  return res.data;
+};
