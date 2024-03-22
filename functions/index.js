@@ -235,14 +235,17 @@ exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async
   response.send("ok");
 });
 
+const slackAPIBaseURL = "https://slack.com/api";
+const contentType = "application/x-www-form-urlencoded";
+
 exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) => {
   try {
     const data = await connect(request.query.code);
-    const userInfo = await fetchUserInfo(data.access_token);
+    const userInfo = await fetchUserInfo(data.userToken);
     const userId = userInfo.sub;
     const email = userInfo.email;
     const picture = userInfo.picture;
-    const name = userInfo.name;
+    const name = await fetchDisplayName(data.botToken, userId);
 
     const customToken = await admin.auth().createCustomToken(userId);
 
@@ -259,27 +262,42 @@ exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) =
 
 const connect = async (code) => {
   const client = axios.create({
-    baseURL: "https://slack.com/api",
+    baseURL: slackAPIBaseURL,
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": contentType,
     },
   });
-  const res = await client.post("/openid.connect.token", {
+  const res = await client.post("/oauth.v2.access", {
     client_id: defineString("SLACK_CLIENT_ID").value(),
     client_secret: defineString("SLACK_CLIENT_SECRET").value(),
     code,
   });
-  return res.data;
+  return {
+    botToken: res.data.access_token,
+    userToken: res.data.authed_user.access_token,
+  };
 };
 
 const fetchUserInfo = async (accessToken) => {
   const client = axios.create({
-    baseURL: "https://slack.com/api",
+    baseURL: slackAPIBaseURL,
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": contentType,
       "Authorization": `Bearer ${accessToken}`,
     },
   });
   const res = await client.get("/openid.connect.userInfo");
   return res.data;
+};
+
+const fetchDisplayName = async (accessToken, userId) => {
+  const client = axios.create({
+    baseURL: slackAPIBaseURL,
+    headers: {
+      "Content-Type": contentType,
+      "Authorization": `Bearer ${accessToken}`,
+    },
+  });
+  const res = await client.get("/users.info" + `?user=${userId}`);
+  return res.data.user.profile.display_name;
 };
