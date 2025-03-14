@@ -3,6 +3,8 @@ const { WebClient } = require('@slack/web-api');
 const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
 
+// Initialize with dummy signing secret for local testing
+const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET || 'dummy_signing_secret_for_local_testing');
 const functions = require('firebase-functions');
 const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
