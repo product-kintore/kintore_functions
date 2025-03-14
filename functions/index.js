@@ -4,6 +4,7 @@ const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
 
 const functions = require('firebase-functions');
+const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -299,8 +300,8 @@ const connect = async (code) => {
     },
   });
   const res = await client.post("/oauth.v2.access", {
-    client_id: defineString("SLACK_CLIENT_ID").value(),
-    client_secret: defineString("SLACK_CLIENT_SECRET").value(),
+    client_id: process.env.SLACK_CLIENT_ID || (functions.config().slack && functions.config().slack.client_id) || defineString("SLACK_CLIENT_ID").value(),
+    client_secret: process.env.SLACK_CLIENT_SECRET || (functions.config().slack && functions.config().slack.client_secret) || defineString("SLACK_CLIENT_SECRET").value(),
     code,
   });
   return {
