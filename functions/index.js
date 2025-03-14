@@ -3,8 +3,7 @@ const { WebClient } = require('@slack/web-api');
 const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
 const functions = require('firebase-functions');
-const functionsV1 = require('firebase-functions/v1');
-const { defineString } = require('firebase-functions/v1/params');
+const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 admin.initializeApp();
 const axios = require('axios');
@@ -219,12 +218,12 @@ function extractContent(tag) {
   return match ? match[1] : null;
 }
 
-exports.slackApp = functionsV1.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackApp = functions.https.onRequest(async (req, res) => {
   console.log('Received a request');
   slackEvents.requestListener()(req, res);
 });
 
-exports.postNewComer = functionsV1.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.postNewComer = functions.https.onRequest(async (req, res) => {
   let text = "今週、新しく参加してくださった方を紹介します:tada::tada:あたたかくお迎えしましょう:muscle: \n";
   text += "--------------\n";
 
@@ -270,7 +269,7 @@ exports.postNewComer = functionsV1.region('asia-northeast1').https.onRequest(asy
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functionsV1.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackAuth = functions.https.onRequest(async (req, res) => {
   try {
     const data = await connect(req.query.code);
     const userInfo = await fetchUserInfo(data.userToken);
