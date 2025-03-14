@@ -271,7 +271,7 @@ const contentType = "application/x-www-form-urlencoded";
 
 exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) => {
   try {
-    const data = await connect(request.query.code);
+    const data = await connect(req.query.code);
     const userInfo = await fetchUserInfo(data.userToken);
     const userId = userInfo.sub;
     const email = userInfo.email;
@@ -282,11 +282,11 @@ exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) =
 
     const url = new URL("https://product-kintore-dev.web.app/");
     url.search = `t=${customToken}&e=${email}&p=${picture}&n=${name}&u=${userId}`;
-    response.redirect(303, url.toString());
+    res.redirect(303, url.toString());
     return;
   } catch (err) {
-    logger.error(err);
-    response.status(500).end();
+    console.error(err); // Changed from logger.error to console.error since logger is not defined
+    res.status(500).end();
     return;
   }
 });
