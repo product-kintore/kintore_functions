@@ -3,14 +3,14 @@ const { WebClient } = require('@slack/web-api');
 const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
 const functions = require('firebase-functions');
-const { defineString } = require('firebase-functions/v1/params');
+const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+admin.initializeApp();
 const axios = require('axios');
 const cheerio = require('cheerio');
 require('dotenv').config();
 
 const firestore = new Firestore();
-admin.initializeApp();
 const projectId = admin.instanceId().app.options.projectId;
 const isDev = projectId != "product-kintore";
 const slackEvents = createEventAdapter(isDev ? process.env.DEV_SLACK_SIGNING_SECRET : process.env.SLACK_SIGNING_SECRET);
