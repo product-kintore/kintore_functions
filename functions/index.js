@@ -270,7 +270,7 @@ exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) => {
+exports.slackAuth = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   try {
     const data = await connect(req.query.code);
     const userInfo = await fetchUserInfo(data.userToken);
