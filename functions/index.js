@@ -2,6 +2,7 @@
 const { WebClient } = require('@slack/web-api');
 const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
+const { defineString } = require('firebase-functions/params');
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -15,7 +16,26 @@ const firestore = new Firestore();
 admin.initializeApp();
 const projectId = admin.instanceId().app.options.projectId;
 const isDev = projectId != "product-kintore";
-const slackEvents = createEventAdapter(isDev ? process.env.DEV_SLACK_SIGNING_SECRET : process.env.SLACK_SIGNING_SECRET);
+
+// 環境変数の優先順位: テスト用 > 通常 > functions.config() > defineString
+const slackClientId = process.env.Knd_Test_SLACK_CLIENT_ID 
+  || process.env.SLACK_CLIENT_ID
+  || (functions.config().slack && functions.config().slack.client_id)
+  || defineString("SLACK_CLIENT_ID").value();
+
+const slackClientSecret = process.env.Knd_Test_SLACK_CLIENT_SECRET
+  || process.env.SLACK_CLIENT_SECRET
+  || (functions.config().slack && functions.config().slack.client_secret)
+  || defineString("SLACK_CLIENT_SECRET").value();
+
+const slackSigningSecret = process.env.Knd_Test_SLACK_SIGNING_SECRET
+  || process.env.SLACK_SIGNING_SECRET
+  || (functions.config().slack && functions.config().slack.signing_secret)
+  || '';
+
+const cookieSecret = process.env.COOKIE_SECRET || '';
+
+const slackEvents = createEventAdapter(isDev ? process.env.DEV_SLACK_SIGNING_SECRET || slackSigningSecret : slackSigningSecret);
 
 const urlPattern = /<(https?:\/\/[^\s]+)>/g;
 const fetchPageTitle = async (url) => {
@@ -272,7 +292,7 @@ const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
 exports.slackAuth = functions.https.onRequest(async (req, res) => {
-  cookieParser()(req, res, async () => {
+  cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのstateパラメータをチェック
       const receivedState = req.query.state;
@@ -329,8 +349,8 @@ const connect = async (code) => {
     });
     
     const res = await client.post("/oauth.v2.access", {
-      client_id: process.env.SLACK_CLIENT_ID || (functions.config().slack && functions.config().slack.client_id),
-      client_secret: process.env.SLACK_CLIENT_SECRET || (functions.config().slack && functions.config().slack.client_secret),
+      client_id: slackClientId,
+      client_secret: slackClientSecret,
       code,
     });
     
@@ -390,7 +410,7 @@ const fetchDisplayName = async (accessToken, userId) => {
       if (res.data && res.data.user && res.data.user.profile) {
 // 新しい関数を追加
 exports.slackLogin = functions.https.onRequest(async (req, res) => {
-  cookieParser()(req, res, async () => {
+  cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのランダムなstate値を生成
       const state = crypto.randomBytes(16).toString('hex');
@@ -404,9 +424,6 @@ exports.slackLogin = functions.https.onRequest(async (req, res) => {
       });
       
       // Slack OAuthの認証URLを生成
-      const slackClientId = process.env.SLACK_CLIENT_ID || 
-        (functions.config().slack && functions.config().slack.client_id);
-        
       const redirectUri = isDev 
         ? 'http://localhost:5001/product-kintore/us-central1/slackAuth'
         : 'https://us-central1-product-kintore.cloudfunctions.net/slackAuth';
