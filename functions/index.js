@@ -291,7 +291,7 @@ exports.postNewComer = functions.https.onRequest(async (req, res) => {
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functions.https.onRequest(async (req, res) => {
+exports.slackAuth = functions.region('us-central1').https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのstateパラメータをチェック
@@ -409,7 +409,7 @@ const fetchDisplayName = async (accessToken, userId) => {
       // display_nameが取得できない場合、real_nameかnameを代替として使用
       if (res.data && res.data.user && res.data.user.profile) {
 // 新しい関数を追加
-exports.slackLogin = functions.https.onRequest(async (req, res) => {
+exports.slackLogin = functions.region('us-central1').https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのランダムなstate値を生成
