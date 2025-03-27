@@ -2,18 +2,40 @@
 const { WebClient } = require('@slack/web-api');
 const { Firestore, FieldValue } = require('@google-cloud/firestore');
 const { createEventAdapter } = require('@slack/events-api');
+const { defineString } = require('firebase-functions/params');
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const firestore = new Firestore();
 admin.initializeApp();
 const projectId = admin.instanceId().app.options.projectId;
 const isDev = projectId != "product-kintore";
-const slackEvents = createEventAdapter(isDev ? process.env.DEV_SLACK_SIGNING_SECRET : process.env.SLACK_SIGNING_SECRET);
+
+// 環境変数の優先順位: 開発テスト用 > 通常 > functions.config() > defineString
+const slackClientId = process.env.DEV_SLACK_CLIENT_ID
+  || process.env.SLACK_CLIENT_ID
+  || (functions.config().slack && functions.config().slack.client_id)
+  || defineString("SLACK_CLIENT_ID").value();
+
+const slackClientSecret = process.env.DEV_SLACK_CLIENT_SECRET
+  || process.env.SLACK_CLIENT_SECRET
+  || (functions.config().slack && functions.config().slack.client_secret)
+  || defineString("SLACK_CLIENT_SECRET").value();
+
+const slackSigningSecret = process.env.DEV_SLACK_SIGNING_SECRET
+  || process.env.SLACK_SIGNING_SECRET
+  || (functions.config().slack && functions.config().slack.signing_secret)
+  || '';
+
+const cookieSecret = process.env.COOKIE_SECRET || '';
+
+const slackEvents = createEventAdapter(isDev ? process.env.DEV_SLACK_SIGNING_SECRET || slackSigningSecret : slackSigningSecret);
 
 const urlPattern = /<(https?:\/\/[^\s]+)>/g;
 const fetchPageTitle = async (url) => {
@@ -218,12 +240,12 @@ function extractContent(tag) {
   return match ? match[1] : null;
 }
 
-exports.slackApp = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackApp = functions.https.onRequest(async (req, res) => {
   console.log('Received a request');
   slackEvents.requestListener()(req, res);
 });
 
-exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.postNewComer = functions.https.onRequest(async (req, res) => {
   let text = "今週、新しく参加してくださった方を紹介します:tada::tada:あたたかくお迎えしましょう:muscle: \n";
   text += "--------------\n";
 
@@ -269,66 +291,166 @@ exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functions.region('asia-northeast1').https(async (req, res) => {
-  try {
-    const data = await connect(request.query.code);
-    const userInfo = await fetchUserInfo(data.userToken);
-    const userId = userInfo.sub;
-    const email = userInfo.email;
-    const picture = userInfo.picture;
-    const name = await fetchDisplayName(data.botToken, userId);
+exports.slackAuth = functions.https.onRequest(async (req, res) => {
+  cookieParser(cookieSecret)(req, res, async () => {
+    try {
+      // CSRF保護のためのstateパラメータをチェック
+      const receivedState = req.query.state;
+      const expectedState = req.cookies && req.cookies['slackAuthState'];
+      
+      if (!receivedState || !expectedState || receivedState !== expectedState) {
+        console.error('CSRF protection: Invalid state parameter');
+        res.status(403).send('セキュリティエラー: 不正なリクエストです');
+        return;
+      }
 
-    const customToken = await admin.auth().createCustomToken(userId);
+      // codeパラメータが存在するか確認
+      if (!req.query.code) {
+        console.error('No code parameter provided');
+        res.status(400).send('Authorization code is required');
+        return;
+      }
 
-    const url = new URL("https://product-kintore-dev.web.app/");
-    url.search = `t=${customToken}&e=${email}&p=${picture}&n=${name}&u=${userId}`;
-    response.redirect(303, url.toString());
-    return;
-  } catch (err) {
-    logger.error(err);
-    response.status(500).end();
-    return;
-  }
+      const data = await connect(req.query.code);
+      const userInfo = await fetchUserInfo(data.userToken);
+      const userId = userInfo.sub;
+      const email = userInfo.email;
+      const picture = userInfo.picture;
+      const name = await fetchDisplayName(data.botToken, userId);
+
+      const customToken = await admin.auth().createCustomToken(userId);
+
+      const url = new URL("https://product-kintore-dev.web.app/");
+      url.search = `t=${customToken}&e=${email}&p=${picture}&n=${name}&u=${userId}`;
+      res.redirect(303, url.toString());
+      return;
+    } catch (err) {
+      console.error('Slack認証エラー:', err);
+      // エラーの種類に基づいて異なるレスポンスを返す
+      if (err.response && err.response.status) {
+        console.error(`Slack API error: ${err.response.status} - ${err.response.data}`);
+        res.status(502).send('外部サービスとの通信エラー');
+      } else {
+        res.status(500).send('内部サーバーエラー');
+      }
+      return;
+    }
+  });
 });
 
 const connect = async (code) => {
-  const client = axios.create({
-    baseURL: slackAPIBaseURL,
-    headers: {
-      "Content-Type": contentType,
-    },
-  });
-  const res = await client.post("/oauth.v2.access", {
-    client_id: defineString("SLACK_CLIENT_ID").value(),
-    client_secret: defineString("SLACK_CLIENT_SECRET").value(),
-    code,
-  });
-  return {
-    botToken: res.data.access_token,
-    userToken: res.data.authed_user.access_token,
-  };
+  try {
+    const client = axios.create({
+      baseURL: slackAPIBaseURL,
+      headers: {
+        "Content-Type": contentType,
+      },
+      timeout: 10000, // タイムアウト設定を追加
+    });
+    
+    const res = await client.post("/oauth.v2.access", {
+      client_id: slackClientId,
+      client_secret: slackClientSecret,
+      code,
+    });
+    
+    if (!res.data || !res.data.access_token || !res.data.authed_user || !res.data.authed_user.access_token) {
+      throw new Error('Slack OAuth response is invalid');
+    }
+    
+    return {
+      botToken: res.data.access_token,
+      userToken: res.data.authed_user.access_token,
+    };
+  } catch (error) {
+    console.error('Slack OAuth接続エラー:', error);
+    throw error; // 上位の関数でキャッチできるようにエラーを再スロー
+  }
 };
 
 const fetchUserInfo = async (accessToken) => {
-  const client = axios.create({
-    baseURL: slackAPIBaseURL,
-    headers: {
-      "Content-Type": contentType,
-      "Authorization": `Bearer ${accessToken}`,
-    },
-  });
-  const res = await client.get("/openid.connect.userInfo");
-  return res.data;
+  try {
+    const client = axios.create({
+      baseURL: slackAPIBaseURL,
+      headers: {
+        "Content-Type": contentType,
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      timeout: 10000, // タイムアウト設定を追加
+    });
+    
+    const res = await client.get("/openid.connect.userInfo");
+    
+    if (!res.data || !res.data.sub) {
+      throw new Error('User info response is invalid');
+    }
+    
+    return res.data;
+  } catch (error) {
+    console.error('ユーザー情報取得エラー:', error);
+    throw error;
+  }
 };
 
 const fetchDisplayName = async (accessToken, userId) => {
-  const client = axios.create({
-    baseURL: slackAPIBaseURL,
-    headers: {
-      "Content-Type": contentType,
-      "Authorization": `Bearer ${accessToken}`,
-    },
-  });
-  const res = await client.get("/users.info" + `?user=${userId}`);
-  return res.data.user.profile.display_name;
+  try {
+    const client = axios.create({
+      baseURL: slackAPIBaseURL,
+      headers: {
+        "Content-Type": contentType,
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      timeout: 10000, // タイムアウト設定を追加
+    });
+    
+    const res = await client.get("/users.info" + `?user=${userId}`);
+    
+    if (!res.data || !res.data.user || !res.data.user.profile || !res.data.user.profile.display_name) {
+      // display_nameが取得できない場合、real_nameかnameを代替として使用
+      // Slackプロフィールでユーザーが表示名（display_name）を設定していない場合や
+      // 空白のままにしている場合に発生することがあります。
+      // その場合は代わりにSlackが提供するreal_nameまたはnameフィールドを使用します。
+      if (res.data && res.data.user && res.data.user.profile) {
+        return res.data.user.profile.real_name || res.data.user.name || 'Unknown User';
+      }
+      throw new Error('Display name could not be retrieved');
+    }
+    
+    return res.data.user.profile.display_name;
+  } catch (error) {
+    console.error('表示名取得エラー:', error);
+    throw error;
+  }
 };
+
+// Slack認証フローを開始する関数
+exports.slackLogin = functions.https.onRequest(async (req, res) => {
+  cookieParser(cookieSecret)(req, res, async () => {
+    try {
+      // CSRF保護のためのランダムなstate値を生成
+      const state = crypto.randomBytes(16).toString('hex');
+      
+      // Cookieにstate値を保存（5分間有効）
+      res.cookie('slackAuthState', state, { 
+        maxAge: 300000, // 5分間
+        httpOnly: true,
+        secure: !isDev, // 開発環境以外ではセキュアCookieを使用
+        sameSite: 'lax'
+      });
+      
+      // Slack OAuthの認証URLを生成
+      const redirectUri = isDev 
+        ? 'http://localhost:5001/product-kintore/asia-northeast1/slackAuth'
+        : 'https://asia-northeast1-product-kintore.cloudfunctions.net/slackAuth';
+      
+      const scope = 'openid,profile,email';
+      const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${slackClientId}&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
+      
+      // Slack認証ページにリダイレクト
+      res.redirect(303, slackAuthUrl);
+    } catch (err) {
+      console.error('Slackログイン開始エラー:', err);
+      res.status(500).send('内部サーバーエラー');
+    }
+  });
+});
