@@ -239,12 +239,12 @@ function extractContent(tag) {
   return match ? match[1] : null;
 }
 
-exports.slackApp = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackApp = functions.https.onRequest(async (req, res) => {
   console.log('Received a request');
   slackEvents.requestListener()(req, res);
 });
 
-exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.postNewComer = functions.https.onRequest(async (req, res) => {
   let text = "今週、新しく参加してくださった方を紹介します:tada::tada:あたたかくお迎えしましょう:muscle: \n";
   text += "--------------\n";
 
@@ -290,7 +290,7 @@ exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackAuth = functions.https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのstateパラメータをチェック
@@ -420,7 +420,7 @@ const fetchDisplayName = async (accessToken, userId) => {
 };
 
 // 新しい関数を追加
-exports.slackLogin = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackLogin = functions.https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのランダムなstate値を生成
