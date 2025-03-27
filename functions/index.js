@@ -18,7 +18,7 @@ const projectId = admin.instanceId().app.options.projectId;
 const isDev = projectId != "product-kintore";
 
 // 環境変数の優先順位: 開発テスト用 > 通常 > functions.config() > defineString
-const slackClientId = process.env.DEV_SLACK_CLIENT_ID 
+const slackClientId = process.env.DEV_SLACK_CLIENT_ID
   || process.env.SLACK_CLIENT_ID
   || (functions.config().slack && functions.config().slack.client_id)
   || defineString("SLACK_CLIENT_ID").value();
@@ -291,7 +291,7 @@ exports.postNewComer = functions.https.onRequest(async (req, res) => {
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackAuth = functions.https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのstateパラメータをチェック
@@ -424,7 +424,7 @@ const fetchDisplayName = async (accessToken, userId) => {
 };
 
 // Slack認証フローを開始する関数
-exports.slackLogin = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
+exports.slackLogin = functions.https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのランダムなstate値を生成
@@ -440,8 +440,8 @@ exports.slackLogin = functions.region('asia-northeast1').https.onRequest(async (
       
       // Slack OAuthの認証URLを生成
       const redirectUri = isDev 
-        ? 'http://localhost:5001/product-kintore-dev/asia-northeast1/slackAuth'
-        : 'https://asia-northeast1-product-kintore-dev.cloudfunctions.net/slackAuth';
+        ? 'http://localhost:5001/product-kintore/asia-northeast1/slackAuth'
+        : 'https://asia-northeast1-product-kintore.cloudfunctions.net/slackAuth';
       
       const scope = 'openid,profile,email';
       const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${slackClientId}&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;

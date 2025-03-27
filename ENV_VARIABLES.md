@@ -21,6 +21,8 @@
 SLACK_CLIENT_ID=xxx
 SLACK_CLIENT_SECRET=xxx
 SLACK_SIGNING_SECRET=xxx
+DEV_SLACK_CLIENT_ID=xxx
+DEV_SLACK_CLIENT_SECRET=xxx
 DEV_SLACK_SIGNING_SECRET=xxx
 COOKIE_SECRET=xxxxxx  # Cookie署名用のシークレット
 ```
@@ -50,6 +52,8 @@ firebase functions:config:set --project=product-kintore slack.client_id="xxx" sl
 | SLACK_CLIENT_ID | Slack APIのクライアントID | はい |
 | SLACK_CLIENT_SECRET | Slack APIのクライアントシークレット | はい |
 | SLACK_SIGNING_SECRET | SlackイベントAPIの署名シークレット | はい |
+| DEV_SLACK_CLIENT_ID | 開発環境用のSlack APIクライアントID | 開発時のみ |
+| DEV_SLACK_CLIENT_SECRET | 開発環境用のSlack APIクライアントシークレット | 開発時のみ |
 | DEV_SLACK_SIGNING_SECRET | 開発環境用のSlackイベントAPI署名シークレット | 開発時のみ |
 | COOKIE_SECRET | Cookie署名用のシークレット | はい |
 
