@@ -9,7 +9,7 @@
         "firebase-debug.log",
         "firebase-debug.*.log"
       ],
-      "region": "us-central1"
+      "region": "asia-northeast1"
     }
   ]
 }

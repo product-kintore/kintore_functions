@@ -17,18 +17,17 @@ admin.initializeApp();
 const projectId = admin.instanceId().app.options.projectId;
 const isDev = projectId != "product-kintore";
 
-// 環境変数の優先順位: テスト用 > 通常 > functions.config() > defineString
-const slackClientId = process.env.Knd_Test_SLACK_CLIENT_ID 
+const slackClientId = process.env.DEV_SLACK_CLIENT_ID 
   || process.env.SLACK_CLIENT_ID
   || (functions.config().slack && functions.config().slack.client_id)
   || defineString("SLACK_CLIENT_ID").value();
 
-const slackClientSecret = process.env.Knd_Test_SLACK_CLIENT_SECRET
+const slackClientSecret = process.env.DEV_SLACK_CLIENT_SECRET
   || process.env.SLACK_CLIENT_SECRET
   || (functions.config().slack && functions.config().slack.client_secret)
   || defineString("SLACK_CLIENT_SECRET").value();
 
-const slackSigningSecret = process.env.Knd_Test_SLACK_SIGNING_SECRET
+const slackSigningSecret = process.env.DEV_SLACK_SIGNING_SECRET
   || process.env.SLACK_SIGNING_SECRET
   || (functions.config().slack && functions.config().slack.signing_secret)
   || '';
@@ -240,12 +239,12 @@ function extractContent(tag) {
   return match ? match[1] : null;
 }
 
-exports.slackApp = functions.https.onRequest(async (req, res) => {
+exports.slackApp = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   console.log('Received a request');
   slackEvents.requestListener()(req, res);
 });
 
-exports.postNewComer = functions.https.onRequest(async (req, res) => {
+exports.postNewComer = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   let text = "今週、新しく参加してくださった方を紹介します:tada::tada:あたたかくお迎えしましょう:muscle: \n";
   text += "--------------\n";
 
@@ -291,7 +290,7 @@ exports.postNewComer = functions.https.onRequest(async (req, res) => {
 const slackAPIBaseURL = "https://slack.com/api";
 const contentType = "application/x-www-form-urlencoded";
 
-exports.slackAuth = functions.region('us-central1').https.onRequest(async (req, res) => {
+exports.slackAuth = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのstateパラメータをチェック
@@ -408,8 +407,20 @@ const fetchDisplayName = async (accessToken, userId) => {
     if (!res.data || !res.data.user || !res.data.user.profile || !res.data.user.profile.display_name) {
       // display_nameが取得できない場合、real_nameかnameを代替として使用
       if (res.data && res.data.user && res.data.user.profile) {
+        return res.data.user.profile.real_name || res.data.user.name || 'Unknown User';
+      }
+      throw new Error('Display name could not be retrieved');
+    }
+    
+    return res.data.user.profile.display_name;
+  } catch (error) {
+    console.error('表示名取得エラー:', error);
+    throw error;
+  }
+};
+
 // 新しい関数を追加
-exports.slackLogin = functions.region('us-central1').https.onRequest(async (req, res) => {
+exports.slackLogin = functions.region('asia-northeast1').https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
       // CSRF保護のためのランダムなstate値を生成
@@ -425,8 +436,8 @@ exports.slackLogin = functions.region('us-central1').https.onRequest(async (req,
       
       // Slack OAuthの認証URLを生成
       const redirectUri = isDev 
-        ? 'http://localhost:5001/product-kintore/us-central1/slackAuth'
-        : 'https://us-central1-product-kintore.cloudfunctions.net/slackAuth';
+        ? 'http://localhost:5001/product-kintore/asia-northeast1/slackAuth'
+        : 'https://asia-northeast1-product-kintore.cloudfunctions.net/slackAuth';
       
       const scope = 'openid,profile,email';
       const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${slackClientId}&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
@@ -439,15 +450,3 @@ exports.slackLogin = functions.region('us-central1').https.onRequest(async (req,
     }
   });
 });
-
-        return res.data.user.profile.real_name || res.data.user.name || 'Unknown User';
-      }
-      throw new Error('Display name could not be retrieved');
-    }
-    
-    return res.data.user.profile.display_name;
-  } catch (error) {
-    console.error('表示名取得エラー:', error);
-    throw error;
-  }
-};
