@@ -17,7 +17,8 @@ admin.initializeApp();
 const projectId = admin.instanceId().app.options.projectId;
 const isDev = projectId != "product-kintore";
 
-const slackClientId = process.env.DEV_SLACK_CLIENT_ID 
+// 環境変数の優先順位: 開発テスト用 > 通常 > functions.config() > defineString
+const slackClientId = process.env.DEV_SLACK_CLIENT_ID
   || process.env.SLACK_CLIENT_ID
   || (functions.config().slack && functions.config().slack.client_id)
   || defineString("SLACK_CLIENT_ID").value();
@@ -406,6 +407,9 @@ const fetchDisplayName = async (accessToken, userId) => {
     
     if (!res.data || !res.data.user || !res.data.user.profile || !res.data.user.profile.display_name) {
       // display_nameが取得できない場合、real_nameかnameを代替として使用
+      // Slackプロフィールでユーザーが表示名（display_name）を設定していない場合や
+      // 空白のままにしている場合に発生することがあります。
+      // その場合は代わりにSlackが提供するreal_nameまたはnameフィールドを使用します。
       if (res.data && res.data.user && res.data.user.profile) {
         return res.data.user.profile.real_name || res.data.user.name || 'Unknown User';
       }
@@ -419,7 +423,7 @@ const fetchDisplayName = async (accessToken, userId) => {
   }
 };
 
-// 新しい関数を追加
+// Slack認証フローを開始する関数
 exports.slackLogin = functions.https.onRequest(async (req, res) => {
   cookieParser(cookieSecret)(req, res, async () => {
     try {
