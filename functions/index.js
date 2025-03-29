@@ -440,8 +440,8 @@ exports.slackLogin = functions.https.onRequest(async (req, res) => {
       
       // Slack OAuthの認証URLを生成
       const redirectUri = isDev 
-        ? 'http://localhost:5001/product-kintore/asia-northeast1/slackAuth'
-        : 'https://asia-northeast1-product-kintore.cloudfunctions.net/slackAuth';
+        ? 'http://localhost:5001/product-kintore/us-central1/slackAuth'
+        : 'https://us-central1-product-kintore.cloudfunctions.net/slackAuth';
       
       const scope = 'openid,profile,email';
       const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${slackClientId}&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
